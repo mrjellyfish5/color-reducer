@@ -9,6 +9,11 @@
 #include "stb_image_write.h"
 
 #define K_CLUSTER_ITERATIONS 8
+// the higher rarity tolerance, the more uncommon a color can be
+#define RARITY_TOLERANCE 16
+#define MAX_RANDOM_OFFSET 5
+#define GET_RANDOM_OFFSET rand() % (MAX_RANDOM_OFFSET * 2) - MAX_RANDOM_OFFSET
+#define MIN_STDEV 2
 
 typedef struct {
 	uint8_t r;
@@ -107,12 +112,22 @@ int main(int argc, char** argv) {
 
 	float distance;
 	float smallest_distance;
+	float* distances = malloc(sizeof(*distances) * pixel_count);
+	uint8_t* colors_sorted = malloc(sizeof(*colors_sorted) * color_num);
+	uint8_t most_popular_color;
+	uint8_t most_popular_color_index;
+	size_t most_popular_color_count;
+	size_t minimum_pixel_count = pixel_count / color_num / RARITY_TOLERANCE;
+	float* color_stdevs = malloc(sizeof(*color_stdevs) * color_num);
+
+	printf("Minimum pixel count: %lu\n", minimum_pixel_count);
 	for (size_t i = 0; i < K_CLUSTER_ITERATIONS; i++) {
 		for (size_t j = 0; j < color_num; j++) {
 			for (size_t k = j * 4; k < j * 4 + 4; k++) {
 				color_sums[k] = 0;
 			}
 			pixels_per_group[j] = 0;
+			color_stdevs[j] = 0;
 		}
 
 		for (size_t j = 0; j < pixel_count; j++) {
@@ -129,6 +144,7 @@ int main(int argc, char** argv) {
 					tmp->closest_color = k;
 				}
 			}
+			distances[j] = smallest_distance;
 			update_color_sums(color_sums, tmp->closest_color, tmp);
 			pixels_per_group[tmp->closest_color]++;
 		}
@@ -140,15 +156,77 @@ int main(int argc, char** argv) {
 				printf("Color %lu: (", j / 4);
 			printf("%f", avg_pixels_f[j]);
 			if (j % 4 == 3)
-				printf(")\n");
+				printf(") (%lu pixels nearest)\n", pixels_per_group[j / 4]);
 			else
 				printf(", ");
 		}
 		printf("\n");
+
+		for (size_t j = 0; j < pixel_count; j++) {
+			tmp = &pixels[j];
+
+			color_stdevs[tmp->closest_color] += sqrt((tmp->r - avg_pixels_f[tmp->closest_color * 4 + 0]) * (tmp->r - avg_pixels_f[tmp->closest_color * 4 + 0]) +
+				 				 (tmp->g - avg_pixels_f[tmp->closest_color * 4 + 1]) * (tmp->g - avg_pixels_f[tmp->closest_color * 4 + 1]) +
+				 				 (tmp->b - avg_pixels_f[tmp->closest_color * 4 + 2]) * (tmp->b - avg_pixels_f[tmp->closest_color * 4 + 2]) +
+				 				 (tmp->a - avg_pixels_f[tmp->closest_color * 4 + 3]) * (tmp->a - avg_pixels_f[tmp->closest_color * 4 + 3]));
+		}
+
+		for (uint8_t j = 0; j < color_num; j++) {
+			color_stdevs[j] = sqrt(color_stdevs[j] / pixels_per_group[j]);
+			printf("Color %d stdev: %f\n", j, color_stdevs[j]);
+		}
+
+		for (size_t j = 0; j < color_num; j++) {
+			colors_sorted[j] = j;
+		}
+
+		for (size_t j = 0; j < color_num; j++) {
+			most_popular_color_count = 0;
+			for (size_t k = 0; k < color_num - j; k++) {
+				if (pixels_per_group[colors_sorted[k]] >= most_popular_color_count) {
+					most_popular_color = colors_sorted[k];
+					most_popular_color_index = k;
+					most_popular_color_count = pixels_per_group[colors_sorted[k]];
+				}
+			}
+			colors_sorted[most_popular_color_index] = colors_sorted[color_num - j - 1];
+			colors_sorted[color_num - j - 1] = most_popular_color;
+		}
+
+		// for the first color that has no pixels closest to it, move its coordinates near the most populous color (while maintaining the same alpha value)
+		most_popular_color_index = color_num - 1;
+		most_popular_color = colors_sorted[most_popular_color_index];
+		for (size_t j = 0; j < color_num; j++) {
+			while (color_stdevs[most_popular_color] < MIN_STDEV && most_popular_color_index > 0) {
+				most_popular_color_index--;
+				most_popular_color = colors_sorted[most_popular_color_index];
+			}
+				
+			if (pixels_per_group[most_popular_color] < minimum_pixel_count) break;
+
+			if (pixels_per_group[j] < minimum_pixel_count) {
+				printf("Moving Color %lu near Color %d...\n", j, most_popular_color);
+
+				avg_pixels_f[j * 4 + 0] = avg_pixels_f[most_popular_color * 4 + 0] + GET_RANDOM_OFFSET;
+				avg_pixels_f[j * 4 + 1] = avg_pixels_f[most_popular_color * 4 + 1] + GET_RANDOM_OFFSET;
+				avg_pixels_f[j * 4 + 2] = avg_pixels_f[most_popular_color * 4 + 2] + GET_RANDOM_OFFSET;
+				avg_pixels_f[j * 4 + 3] = avg_pixels_f[most_popular_color * 4 + 3];
+				
+				most_popular_color_index--;
+				most_popular_color = colors_sorted[most_popular_color_index];
+				
+				if (pixels_per_group[most_popular_color] < minimum_pixel_count) break;
+			}
+		}
+		printf("\n");
 	}
+
+	free(colors_sorted);
 
 	free(pixels_per_group);
 	free(color_sums);
+	free(distances);
+	free(color_stdevs);
 
 	pixel* avg_pixels = malloc(sizeof(*avg_pixels) * color_num);
 	
