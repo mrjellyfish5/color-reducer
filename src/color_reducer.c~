@@ -208,7 +208,7 @@ int main(int argc, char** argv) {
 			if (pixels_per_group[most_popular_color] < minimum_pixel_count) break;
 
 			if (pixels_per_group[least_popular_color] < minimum_pixel_count) {
-				printf("Moving Color %d near Color %d...\n", least_popular_color, most_popular_color);
+				printf("Moving Color %lu near Color %d...\n", least_popular_color, most_popular_color);
 
 				avg_pixels_f[least_popular_color * 4 + 0] = avg_pixels_f[most_popular_color * 4 + 0] + GET_RANDOM_OFFSET;
 				avg_pixels_f[least_popular_color * 4 + 1] = avg_pixels_f[most_popular_color * 4 + 1] + GET_RANDOM_OFFSET;
