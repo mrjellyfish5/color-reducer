@@ -43,4 +43,4 @@ $(BIN): $(OBJS)
 #	./build/test_person
 
 clean:
-	rm -rf $(OBJDIR) libcolor.a bin build */*~ */.*~ out
+	rm -rf $(OBJDIR) libcolor.a bin build */*~ */.*~ out *~ ./.*~
