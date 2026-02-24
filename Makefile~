@@ -34,7 +34,6 @@ $(OBJDIR):
 # app linking: link object files (including the glad object)
 $(BIN): $(OBJS)
 	@mkdir -p bin
-	@mkdir -p out
 	$(CC) $(OBJS) -o $@ $(LIBS)
 
 #test: libfamily.a tests/test_person.c
@@ -43,4 +42,4 @@ $(BIN): $(OBJS)
 #	./build/test_person
 
 clean:
-	rm -rf $(OBJDIR) libcolor.a bin build */*~ */.*~ out
+	rm -rf $(OBJDIR) libcolor.a bin build
